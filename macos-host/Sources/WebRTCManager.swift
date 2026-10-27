@@ -22,6 +22,7 @@ public protocol WebRTCManagerDelegate: AnyObject {
     func webRTCStatusDidChange(_ status: String)
     func webRTCClientConnected()
     func webRTCClientDisconnected()
+    func webRTCRequestHostRestart(reason: String)
 }
 
 /// Gestore principale della connessione Peer-to-Peer WebRTC, DataChannel e streaming video/audio
@@ -145,12 +146,14 @@ public final class WebRTCManager: NSObject {
     public func startHostSession(serverBaseUrl: URL, macId: String) {
         self.currentServerBaseUrl = serverBaseUrl
         self.currentMacId = macId
-        self.videoTrack.isEnabled = true
         self.isResettingSession = false
+        // Ricrea factory, capturer e tracce pulite a ogni avvio
+        setupWebRTC()
+        self.videoTrack.isEnabled = true
         self.createOfferAndStartSession(serverBaseUrl: serverBaseUrl, macId: macId)
     }
 
-    /// Crea l'istanza di RTCPeerConnection e registra l'SDP Offer (usato sia al primo avvio che dopo disconnessione)
+    /// Crea l'istanza di RTCPeerConnection e registra l'SDP Offer (usato sia al primo avvio che dopo riavvio)
     private func createOfferAndStartSession(serverBaseUrl: URL, macId: String) {
         let config = RTCConfiguration()
         config.iceServers = loadIceServers()
@@ -223,43 +226,17 @@ public final class WebRTCManager: NSObject {
         }
     }
 
-    /// Esegue il reset automatico della sessione e genera una nuova Offer per il prossimo client
-    public func triggerSessionReset(reason: String) {
+    /// Notifica il ViewModel di eseguire un riavvio completo del server host (ScreenCaptureKit + WebRTC)
+    public func requestHostRestart(reason: String) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            guard self.currentServerBaseUrl != nil, self.currentMacId != nil else { return }
             guard !self.isResettingSession else { return }
             self.isResettingSession = true
 
-            print("[WebRTC Host] Reset sessione avviato (Motivo: \(reason)). Rigenerazione offerta per nuovo client...")
-            self.delegate?.webRTCStatusDidChange("Client disconnesso (\(reason)). Rigenerazione offerta per nuovo client...")
+            print("[WebRTC Host] Richiesta riavvio completo host (Motivo: \(reason))...")
+            self.delegate?.webRTCStatusDidChange("Client disconnesso (\(reason)). Riavvio del server...")
             self.delegate?.webRTCClientDisconnected()
-
-            // Ferma polling e timer
-            self.pollTimer?.invalidate()
-            self.pollTimer = nil
-            self.iceGatheringTimeoutItem?.cancel()
-            self.iceGatheringTimeoutItem = nil
-
-            // Rilascia PeerConnection e DataChannel precedenti (mantenendo ScreenCaptureKit e videoTrack intatti)
-            self.dataChannel?.close()
-            self.dataChannel = nil
-            self.peerConnection?.close()
-            self.peerConnection = nil
-            self.isOfferRegistered = false
-            self.isAnswerSet = false
-            self.processedCandidateCount = 0
-
-            // Attendi 400ms per garantire il rilascio delle risorse prima di ricreare
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-                guard let self = self, let url = self.currentServerBaseUrl, let id = self.currentMacId else {
-                    self?.isResettingSession = false
-                    return
-                }
-                self.isResettingSession = false
-                print("[WebRTC Host] Creazione nuova PeerConnection per il prossimo client...")
-                self.createOfferAndStartSession(serverBaseUrl: url, macId: id)
-            }
+            self.delegate?.webRTCRequestHostRestart(reason: reason)
         }
     }
 
@@ -313,7 +290,7 @@ public final class WebRTCManager: NSObject {
                         // 0. Se il client richiede un reset della sessione dal file CSV
                         if let resetReq = response.reset_requested, resetReq, self.isAnswerSet {
                             print("[WebRTC Host] Richiesta di reset rilevata dal server PHP.")
-                            self.triggerSessionReset(reason: "Richiesta reset dal client")
+                            self.requestHostRestart(reason: "Richiesta reset dal client")
                             return
                         }
 
@@ -424,15 +401,15 @@ extension WebRTCManager: RTCPeerConnectionDelegate {
                 print("[WebRTC Host ICE Connection] Stato: completed (tutti i candidati verificati)")
             case .failed:
                 print("[WebRTC Host ICE Connection] Stato: failed (connessione ICE fallita, candidati esauriti)")
-                self.delegate?.webRTCStatusDidChange("Connessione P2P fallita. Riavvio sessione per nuova connessione...")
-                self.triggerSessionReset(reason: "ICE failed")
+                self.delegate?.webRTCStatusDidChange("Connessione P2P fallita. Riavvio server host...")
+                self.requestHostRestart(reason: "ICE failed")
             case .disconnected:
                 print("[WebRTC Host ICE Connection] Stato: disconnected (connessione interrotta)")
-                self.delegate?.webRTCStatusDidChange("Client disconnesso. Riavvio sessione per nuova connessione...")
-                self.triggerSessionReset(reason: "ICE disconnected")
+                self.delegate?.webRTCStatusDidChange("Client disconnesso. Riavvio server host...")
+                self.requestHostRestart(reason: "ICE disconnected")
             case .closed:
                 print("[WebRTC Host ICE Connection] Stato: closed")
-                self.triggerSessionReset(reason: "ICE closed")
+                self.requestHostRestart(reason: "ICE closed")
             case .count:
                 break
             @unknown default:
@@ -475,8 +452,8 @@ extension WebRTCManager: RTCDataChannelDelegate {
     public func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         print("[RTCDataChannel] Stato cambiato: \(dataChannel.readyState.rawValue)")
         if dataChannel.readyState == .closed {
-            print("[RTCDataChannel] Canale chiuso. Riavvio sessione per nuovo client...")
-            self.triggerSessionReset(reason: "DataChannel closed")
+            print("[RTCDataChannel] Canale chiuso. Riavvio server host...")
+            self.requestHostRestart(reason: "DataChannel closed")
         }
     }
 
@@ -486,7 +463,7 @@ extension WebRTCManager: RTCDataChannelDelegate {
         }
         if message.contains("\"disconnect\"") {
             print("[WebRTC Host] Ricevuto messaggio esplicito di disconnessione dal client.")
-            self.triggerSessionReset(reason: "Disconnessione esplicita client")
+            self.requestHostRestart(reason: "Disconnessione esplicita client")
             return
         }
         // Inietta immediatamente il comando mouse/tastiera nel sistema operativo

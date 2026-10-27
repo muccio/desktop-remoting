@@ -173,9 +173,11 @@ class RemoteDesktopActivity : AppCompatActivity(), WebRTCListener {
 
         lifecycleScope.launch {
             try {
-                // Notifica esplicita all'host via DataChannel per reset immediato
+                // Notifica esplicita all'host via DataChannel per riavvio immediato
                 webRTCManager?.sendInputEvent(DisconnectEvent())
-                delay(120)
+                delay(80)
+                // Notifica anche al server PHP per garantire che l'Host esegua il restart
+                signalingClient.sendResetRequest(serverUrl, macId)
             } catch (e: Exception) {
                 Log.e("RemoteDesktop", "Errore invio disconnessione: ${e.message}")
             }
@@ -235,18 +237,22 @@ class RemoteDesktopActivity : AppCompatActivity(), WebRTCListener {
                         val status = res.optString("status")
 
                         if (res.optBoolean("found") && res.optBoolean("has_offer")) {
-                            if (status == "ready" && attempts == 0) {
-                                // Sessione precedente già consumata: richiedi reset all'Host Mac
-                                binding.tvLoadingDetails.text = "Vecchia sessione rilevata. Richiesta nuova offerta all'Host..."
+                            if ((status == "answered" || status == "ready" || status == "reset_requested") && attempts == 0) {
+                                // Sessione precedente già consumata: richiedi reset e riavvio all'Host Mac
+                                binding.tvLoadingDetails.text = "Sessione precedente rilevata ($status). Richiesta nuova offerta all'Host..."
                                 signalingClient.sendResetRequest(serverUrl, macId)
                                 delay(1200)
                                 attempts++
                                 continue
                             }
 
-                            offerSdp = res.optString("sdp_offer")
-                            iceServersJson = res.optJSONArray("ice_servers")
-                            break
+                            if (status == "waiting") {
+                                offerSdp = res.optString("sdp_offer")
+                                iceServersJson = res.optJSONArray("ice_servers")
+                                break
+                            } else {
+                                binding.tvLoadingDetails.text = "In attesa che l'Host completi il riavvio (stato: $status)..."
+                            }
                         }
                     } catch (e: Exception) {
                         if (e is CancellationException) return@launch

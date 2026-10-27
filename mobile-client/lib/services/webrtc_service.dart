@@ -40,8 +40,8 @@ class WebRTCService {
           macId: macId,
         );
 
-        if (poll.status == 'ready' && retries == 0) {
-          onStatusUpdate('Sessione precedente rilevata. Invio richiesta reset...');
+        if ((poll.status == 'answered' || poll.status == 'ready' || poll.status == 'reset_requested') && retries == 0) {
+          onStatusUpdate('Sessione precedente rilevata (${poll.status}). Invio richiesta riavvio host...');
           try {
             await signalingService.sendResetRequest(
               serverBaseUrl: serverBaseUrl,
@@ -53,7 +53,7 @@ class WebRTCService {
           continue;
         }
 
-        if (poll.found && poll.hasOffer && poll.sdpOffer != null) {
+        if (poll.status == 'waiting' && poll.found && poll.hasOffer && poll.sdpOffer != null) {
           remoteOfferSdp = poll.sdpOffer;
           serverIceServers = poll.iceServers;
           break;

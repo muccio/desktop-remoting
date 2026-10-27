@@ -110,6 +110,7 @@ final class HostViewModel: ObservableObject, ScreenCaptureManagerDelegate, WebRT
 
     func stopHost() {
         isRunning = false
+        isRestartingHost = false
         statusMessage = "Arresto in corso..."
 
         let url = URL(string: serverUrl.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -118,6 +119,44 @@ final class HostViewModel: ObservableObject, ScreenCaptureManagerDelegate, WebRT
         Task {
             await screenCaptureManager.stopCapture()
             statusMessage = "Host disconnesso."
+        }
+    }
+
+    private var isRestartingHost: Bool = false
+
+    /// Riavvia completamente la pipeline del server (ScreenCaptureKit + WebRTC) alla disconnessione del client
+    func restartHost(reason: String) {
+        guard isRunning else { return }
+        guard !isRestartingHost else { return }
+        isRestartingHost = true
+
+        statusMessage = "Client disconnesso (\(reason)). Riavvio del server in corso..."
+
+        let url = URL(string: serverUrl.trimmingCharacters(in: .whitespacesAndNewlines))
+        webRTCManager.stopSession(serverBaseUrl: url, macId: macId)
+
+        Task {
+            await screenCaptureManager.stopCapture()
+
+            // Pausa di 600ms per consentire il rilascio completo di stream, encoder e socket
+            try? await Task.sleep(nanoseconds: 600_000_000)
+
+            guard self.isRunning else {
+                self.isRestartingHost = false
+                return
+            }
+
+            self.statusMessage = "Riavvio acquisizione e offerta WebRTC in corso..."
+            do {
+                try await self.screenCaptureManager.startCapture(targetFps: self.targetFps, resolution: self.selectedResolution)
+                if let validUrl = url {
+                    self.webRTCManager.startHostSession(serverBaseUrl: validUrl, macId: self.macId)
+                }
+                self.isRestartingHost = false
+            } catch {
+                self.statusMessage = "Errore riavvio host: \(error.localizedDescription)"
+                self.isRestartingHost = false
+            }
         }
     }
 
@@ -146,6 +185,12 @@ final class HostViewModel: ObservableObject, ScreenCaptureManagerDelegate, WebRT
     nonisolated func webRTCClientDisconnected() {
         Task { @MainActor in
             self.statusMessage = "Client Mobile Disconnesso"
+        }
+    }
+
+    nonisolated func webRTCRequestHostRestart(reason: String) {
+        Task { @MainActor in
+            self.restartHost(reason: reason)
         }
     }
 }
