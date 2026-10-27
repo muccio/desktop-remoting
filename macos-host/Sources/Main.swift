@@ -4,14 +4,22 @@ import CoreGraphics
 import CoreMedia
 import CoreVideo
 
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillTerminate(_ notification: Notification) {
+        print("[AppDelegate] Applicazione in chiusura: rilascio stato sleep...")
+        SleepPreventer.shared.restoreAllSynchronous()
+    }
+}
+
 @main
 struct HostApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var model = HostViewModel()
 
     var body: some Scene {
         WindowGroup {
             ContentView(model: model)
-                .frame(minWidth: 540, minHeight: 520)
+                .frame(minWidth: 540, minHeight: 620)
         }
         .windowResizability(.contentSize)
     }
@@ -29,6 +37,10 @@ final class HostViewModel: ObservableObject, ScreenCaptureManagerDelegate, WebRT
 
     @Published var isScreenCaptureGranted: Bool = false
     @Published var isAccessibilityGranted: Bool = false
+
+    // Prevenzione Sleep e Coperchio Chiuso (Clamshell)
+    @Published var keepLidCloseAwake: Bool = true
+    @ObservedObject var sleepPreventer = SleepPreventer.shared
 
     private let screenCaptureManager = ScreenCaptureManager()
     nonisolated private let webRTCManager = WebRTCManager()
@@ -97,6 +109,9 @@ final class HostViewModel: ObservableObject, ScreenCaptureManagerDelegate, WebRT
         isRunning = true
         statusMessage = "Inizializzazione cattura schermo e WebRTC..."
 
+        // Attiva la prevenzione della sospensione (Idle + Display + opzionale Lid-Close)
+        SleepPreventer.shared.startPrevention(preventLidClose: keepLidCloseAwake)
+
         Task {
             do {
                 try await screenCaptureManager.startCapture(targetFps: targetFps, resolution: selectedResolution)
@@ -104,6 +119,7 @@ final class HostViewModel: ObservableObject, ScreenCaptureManagerDelegate, WebRT
             } catch {
                 statusMessage = "Errore avvio: \(error.localizedDescription)"
                 isRunning = false
+                SleepPreventer.shared.stopPrevention()
             }
         }
     }
@@ -113,12 +129,27 @@ final class HostViewModel: ObservableObject, ScreenCaptureManagerDelegate, WebRT
         isRestartingHost = false
         statusMessage = "Arresto in corso..."
 
+        // Rilascia le asserzioni di sospensione e ripristina pmset
+        SleepPreventer.shared.stopPrevention()
+
         let url = URL(string: serverUrl.trimmingCharacters(in: .whitespacesAndNewlines))
         webRTCManager.stopSession(serverBaseUrl: url, macId: macId)
 
         Task {
             await screenCaptureManager.stopCapture()
             statusMessage = "Host disconnesso."
+        }
+    }
+
+    /// Aggiorna la modalità coperchio chiuso anche a sessione in corso
+    func updateLidCloseAwakeToggle(_ enabled: Bool) {
+        keepLidCloseAwake = enabled
+        if isRunning {
+            if enabled {
+                SleepPreventer.shared.enableLidCloseSleepPrevention()
+            } else {
+                SleepPreventer.shared.disableLidCloseSleepPrevention()
+            }
         }
     }
 
@@ -348,6 +379,85 @@ struct ContentView: View {
                         .tint(.orange)
                     }
                     .padding(.top, 4)
+                }
+            }
+            .padding(12)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(10)
+
+            // Box Gestione Sospensione e Chiusura Coperchio (Clamshell)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Image(systemName: "powersleep")
+                        .foregroundColor(.indigo)
+                    Text("Gestione Sospensione & Coperchio Chiuso")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                    Spacer()
+
+                    // Badge di Stato Visivo
+                    if model.isRunning {
+                        if model.sleepPreventer.isLidCloseSleepPrevented {
+                            HStack(spacing: 4) {
+                                Image(systemName: "lock.shield.fill")
+                                    .font(.system(size: 11))
+                                Text("Lid-Close Awake: ATTIVO")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.green.opacity(0.18))
+                            .foregroundColor(.green)
+                            .cornerRadius(6)
+                        } else if model.sleepPreventer.isDisplaySleepPrevented || model.sleepPreventer.isIdleSleepPrevented {
+                            HStack(spacing: 4) {
+                                Image(systemName: "display")
+                                    .font(.system(size: 11))
+                                Text("Display Awake: ATTIVO")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.18))
+                            .foregroundColor(.blue)
+                            .cornerRadius(6)
+                        }
+                    } else {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color.secondary)
+                                .frame(width: 6, height: 6)
+                            Text("Awake: Inattivo")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Toggle("Mantieni attivo a coperchio chiuso (Lid-Close Clamshell)", isOn: Binding(
+                    get: { model.keepLidCloseAwake },
+                    set: { model.updateLidCloseAwakeToggle($0) }
+                ))
+                .font(.footnote)
+                .fontWeight(.semibold)
+
+                Text("Impedisce la sospensione del MacBook quando il coperchio viene chiuso fisicamente senza monitor esterno (`pmset disablesleep 1`). Il flusso ScreenCaptureKit e la connessione WebRTC rimangono sempre attivi.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if model.isRunning && model.sleepPreventer.isLidCloseSleepPrevented {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.caption)
+                        Text("Puoi chiudere il coperchio del MacBook in sicurezza: lo streaming continuerà a funzionare.")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                            .fontWeight(.medium)
+                    }
                 }
             }
             .padding(12)
