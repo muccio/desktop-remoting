@@ -1,0 +1,12 @@
+<resources>
+    <style name="Theme.RemoteDesktop" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="colorPrimary">@color/accent_blue</item>
+        <item name="colorSecondary">@color/accent_blue</item>
+    </style>
+
+    <style name="Theme.RemoteDesktop.Fullscreen" parent="Theme.RemoteDesktop">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+</resources>

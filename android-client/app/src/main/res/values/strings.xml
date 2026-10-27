@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Mac Remote</string>
+    <string name="connect_title">Connessione al Mac Remoto</string>
+    <string name="connect_subtitle">Signaling CSV + WebRTC 60 FPS P2P</string>
+    <string name="server_url_hint">http://tuo-server.it/backend-php</string>
+    <string name="mac_id_hint">es. mac-remote-host</string>
+    <string name="connect_button">Connetti al Desktop Remoto</string>
+</resources>

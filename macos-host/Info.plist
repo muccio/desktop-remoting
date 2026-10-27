@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.desktopremoting.host</string>
+    <key>CFBundleName</key>
+    <string>MacHost</string>
+    <key>CFBundleDisplayName</key>
+    <string>Mac Remote Host</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Questa applicazione richiede l'accesso alla registrazione dello schermo per trasmettere il desktop in tempo reale al dispositivo mobile remoto.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Questa applicazione richiede l'accesso all'audio per catturare e trasmettere il flusso sonoro di sistema.</string>
+</dict>
+</plist>

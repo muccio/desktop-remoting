@@ -1,0 +1,10 @@
+# Protezione del file sessions.csv da accessi HTTP diretti
+<Files "sessions.csv">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# Apache 2.4+
+<Files "sessions.csv">
+    Require all denied
+</Files>

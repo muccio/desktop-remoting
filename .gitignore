@@ -1,0 +1,70 @@
+# ==============================================================================
+# Credenziali e Segreti Privati (NON COMMETTERE SU GITHUB)
+# ==============================================================================
+ice_servers.json
+**/ice_servers.json
+turn_credentials.json
+**/turn_credentials.json
+.env
+.env.*
+!.env.example
+*.local.php
+config.local.php
+
+# ==============================================================================
+# File di Sistema e Temporanei
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# ==============================================================================
+# Backend PHP
+# ==============================================================================
+backend-php/sessions.csv
+*.log
+
+# ==============================================================================
+# macOS Host (Swift / Xcode)
+# ==============================================================================
+macos-host/.build/
+macos-host/build/
+macos-host/Packages/
+macos-host/*.xcodeproj/
+macos-host/*.xcworkspace/
+.swiftpm/
+
+# ==============================================================================
+# Android Client (Gradle / Kotlin)
+# ==============================================================================
+android-client/.gradle/
+android-client/build/
+android-client/*/build/
+android-client/local.properties
+android-client/.idea/
+android-client/*.iml
+android-client/*/*.iml
+android-client/app/src/main/assets/ice_servers.json
+*.apk
+*.aab
+
+# ==============================================================================
+# Flutter / Mobile Client
+# ==============================================================================
+mobile-client/.dart_tool/
+mobile-client/.flutter-plugins
+mobile-client/.flutter-plugins-dependencies
+mobile-client/.packages
+mobile-client/build/
+mobile-client/ios/Pods/
+mobile-client/ios/.symlinks/
+mobile-client/ios/Flutter/Flutter.framework
+mobile-client/ios/Flutter/Flutter.podspec
+mobile-client/assets/ice_servers.json

@@ -1,0 +1,36 @@
+[
+  {
+    "urls": [
+      "stun:stun.relay.metered.ca:80",
+      "stun:stun.l.google.com:19302"
+    ]
+  },
+  {
+    "urls": [
+      "turn:standard.relay.metered.ca:80"
+    ],
+    "username": "YOUR_METERED_USERNAME",
+    "credential": "YOUR_METERED_CREDENTIAL"
+  },
+  {
+    "urls": [
+      "turn:standard.relay.metered.ca:80?transport=tcp"
+    ],
+    "username": "YOUR_METERED_USERNAME",
+    "credential": "YOUR_METERED_CREDENTIAL"
+  },
+  {
+    "urls": [
+      "turn:standard.relay.metered.ca:443"
+    ],
+    "username": "YOUR_METERED_USERNAME",
+    "credential": "YOUR_METERED_CREDENTIAL"
+  },
+  {
+    "urls": [
+      "turns:standard.relay.metered.ca:443?transport=tcp"
+    ],
+    "username": "YOUR_METERED_USERNAME",
+    "credential": "YOUR_METERED_CREDENTIAL"
+  }
+]
