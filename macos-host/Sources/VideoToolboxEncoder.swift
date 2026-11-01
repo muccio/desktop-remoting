@@ -86,16 +86,21 @@ public final class VideoToolboxEncoder {
     }
 
     /// Comprime un CVPixelBuffer proveniente da ScreenCaptureKit
-    public func encode(pixelBuffer: CVPixelBuffer, presentationTimeStamp: CMTime, duration: CMTime = .invalid) {
+    public func encode(pixelBuffer: CVPixelBuffer, presentationTimeStamp: CMTime, duration: CMTime = .invalid, forceKeyframe: Bool = false) {
         guard let session = session else { return }
 
         var flags: VTEncodeInfoFlags = []
+        var frameProperties: CFDictionary? = nil
+        if forceKeyframe {
+            frameProperties = [kVTEncodeFrameOptionKey_ForceKeyFrame: kCFBooleanTrue] as CFDictionary
+        }
+
         let status = VTCompressionSessionEncodeFrame(
             session,
             imageBuffer: pixelBuffer,
             presentationTimeStamp: presentationTimeStamp,
             duration: duration,
-            frameProperties: nil,
+            frameProperties: frameProperties,
             sourceFrameRefcon: nil,
             infoFlagsOut: &flags
         )
@@ -111,5 +116,55 @@ public final class VideoToolboxEncoder {
             VTCompressionSessionInvalidate(session)
             self.session = nil
         }
+    }
+}
+
+/// Struttura di supporto per estrarre SPS, PPS e NALU da un CMSampleBuffer compresso
+public struct H264FramePayload {
+    public let isKeyframe: Bool
+    public let sps: Data?
+    public let pps: Data?
+    public let naluData: Data
+    public let timestampValue: Int64
+    public let timescale: Int32
+
+    public static func from(sampleBuffer: CMSampleBuffer) -> H264FramePayload? {
+        guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return nil }
+        var lengthAtOffsetOut: Int = 0
+        var totalLengthOut: Int = 0
+        var dataPointerOut: UnsafeMutablePointer<CChar>?
+        guard CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: &lengthAtOffsetOut, totalLengthOut: &totalLengthOut, dataPointerOut: &dataPointerOut) == noErr,
+              let ptr = dataPointerOut else { return nil }
+        let naluData = Data(bytes: ptr, count: totalLengthOut)
+
+        let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[CFString: Any]]
+        let notSync = attachments?.first?[kCMSampleAttachmentKey_NotSync] as? Bool ?? false
+        let isKeyframe = !notSync
+
+        var spsData: Data? = nil
+        var ppsData: Data? = nil
+
+        if isKeyframe, let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
+            var spsPtr: UnsafePointer<UInt8>?
+            var spsSize: Int = 0
+            if CMVideoFormatDescriptionGetH264ParameterSetAtIndex(formatDesc, parameterSetIndex: 0, parameterSetPointerOut: &spsPtr, parameterSetSizeOut: &spsSize, parameterSetCountOut: nil, nalUnitHeaderLengthOut: nil) == noErr, let p = spsPtr {
+                spsData = Data(bytes: p, count: spsSize)
+            }
+            var ppsPtr: UnsafePointer<UInt8>?
+            var ppsSize: Int = 0
+            if CMVideoFormatDescriptionGetH264ParameterSetAtIndex(formatDesc, parameterSetIndex: 1, parameterSetPointerOut: &ppsPtr, parameterSetSizeOut: &ppsSize, parameterSetCountOut: nil, nalUnitHeaderLengthOut: nil) == noErr, let p = ppsPtr {
+                ppsData = Data(bytes: p, count: ppsSize)
+            }
+        }
+
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        return H264FramePayload(
+            isKeyframe: isKeyframe,
+            sps: spsData,
+            pps: ppsData,
+            naluData: naluData,
+            timestampValue: pts.value,
+            timescale: pts.timescale
+        )
     }
 }

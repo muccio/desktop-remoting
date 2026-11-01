@@ -22,5 +22,11 @@
     <string>Questa applicazione richiede l'accesso alla registrazione dello schermo per trasmettere il desktop in tempo reale al dispositivo mobile remoto.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Questa applicazione richiede l'accesso all'audio per catturare e trasmettere il flusso sonoro di sistema.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Questa applicazione richiede l'accesso alla rete locale per scoprire e trasmettere lo schermo a bassissima latenza tra Mac e iMac.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_desktopremoting._tcp</string>
+    </array>
 </dict>
 </plist>

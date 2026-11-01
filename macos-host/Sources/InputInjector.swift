@@ -71,6 +71,15 @@ public final class InputInjector {
                 injectMouseUp(at: CGPoint(x: targetX, y: targetY), button: button)
             }
 
+        case "mouse_drag":
+            if let normX = payload["x"] as? Double,
+               let normY = payload["y"] as? Double {
+                let targetX = CGFloat(normX) * screenWidth
+                let targetY = CGFloat(normY) * screenHeight
+                let button = (payload["button"] as? String) ?? "left"
+                injectMouseDrag(to: CGPoint(x: targetX, y: targetY), button: button)
+            }
+
         case "mouse_scroll":
             let dx = (payload["dx"] as? Double) ?? 0.0
             let dy = (payload["dy"] as? Double) ?? 0.0
@@ -78,12 +87,14 @@ public final class InputInjector {
 
         case "key_down":
             if let keyCode = payload["keyCode"] as? UInt16 {
-                injectKeyEvent(keyCode: keyCode, isDown: true)
+                let flags = (payload["flags"] as? UInt64) ?? (payload["flags"] as? Int).map { UInt64($0) }
+                injectKeyEvent(keyCode: keyCode, isDown: true, flags: flags)
             }
 
         case "key_up":
             if let keyCode = payload["keyCode"] as? UInt16 {
-                injectKeyEvent(keyCode: keyCode, isDown: false)
+                let flags = (payload["flags"] as? UInt64) ?? (payload["flags"] as? Int).map { UInt64($0) }
+                injectKeyEvent(keyCode: keyCode, isDown: false, flags: flags)
             }
 
         case "text_input":
@@ -142,8 +153,19 @@ public final class InputInjector {
     }
 
     public func injectMouseDown(at point: CGPoint, button: String = "left") {
-        let mouseType: CGEventType = (button == "right") ? .rightMouseDown : .leftMouseDown
-        let mouseButton: CGMouseButton = (button == "right") ? .right : .left
+        let mouseType: CGEventType
+        let mouseButton: CGMouseButton
+        switch button {
+        case "right":
+            mouseType = .rightMouseDown
+            mouseButton = .right
+        case "other":
+            mouseType = .otherMouseDown
+            mouseButton = .center
+        default:
+            mouseType = .leftMouseDown
+            mouseButton = .left
+        }
 
         guard let event = CGEvent(mouseEventSource: nil, mouseType: mouseType, mouseCursorPosition: point, mouseButton: mouseButton) else {
             return
@@ -152,8 +174,40 @@ public final class InputInjector {
     }
 
     public func injectMouseUp(at point: CGPoint, button: String = "left") {
-        let mouseType: CGEventType = (button == "right") ? .rightMouseUp : .leftMouseUp
-        let mouseButton: CGMouseButton = (button == "right") ? .right : .left
+        let mouseType: CGEventType
+        let mouseButton: CGMouseButton
+        switch button {
+        case "right":
+            mouseType = .rightMouseUp
+            mouseButton = .right
+        case "other":
+            mouseType = .otherMouseUp
+            mouseButton = .center
+        default:
+            mouseType = .leftMouseUp
+            mouseButton = .left
+        }
+
+        guard let event = CGEvent(mouseEventSource: nil, mouseType: mouseType, mouseCursorPosition: point, mouseButton: mouseButton) else {
+            return
+        }
+        event.post(tap: .cghidEventTap)
+    }
+
+    public func injectMouseDrag(to point: CGPoint, button: String = "left") {
+        let mouseType: CGEventType
+        let mouseButton: CGMouseButton
+        switch button {
+        case "right":
+            mouseType = .rightMouseDragged
+            mouseButton = .right
+        case "other":
+            mouseType = .otherMouseDragged
+            mouseButton = .center
+        default:
+            mouseType = .leftMouseDragged
+            mouseButton = .left
+        }
 
         guard let event = CGEvent(mouseEventSource: nil, mouseType: mouseType, mouseCursorPosition: point, mouseButton: mouseButton) else {
             return
@@ -169,9 +223,12 @@ public final class InputInjector {
         event.post(tap: .cghidEventTap)
     }
 
-    public func injectKeyEvent(keyCode: UInt16, isDown: Bool) {
+    public func injectKeyEvent(keyCode: UInt16, isDown: Bool, flags: UInt64? = nil) {
         guard let event = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(keyCode), keyDown: isDown) else {
             return
+        }
+        if let flags = flags {
+            event.flags = CGEventFlags(rawValue: flags)
         }
         event.post(tap: .cghidEventTap)
     }
