@@ -46,7 +46,21 @@ struct HostApp: App {
 @MainActor
 final class HostViewModel: ObservableObject, ScreenCaptureManagerDelegate, WebRTCManagerDelegate, LANStreamServerDelegate, LANStreamClientDelegate {
     // Ruolo principale applicazione
-    @Published var appRole: AppRole = .host
+    @Published var appRole: AppRole = {
+        if let saved = UserDefaults.standard.string(forKey: "saved_app_role"),
+           let role = AppRole(rawValue: saved) {
+            return role
+        }
+        let hostname = Host.current().localizedName?.lowercased() ?? ""
+        if hostname.contains("imac") {
+            return .client
+        }
+        return .host
+    }() {
+        didSet {
+            UserDefaults.standard.set(appRole.rawValue, forKey: "saved_app_role")
+        }
+    }
 
     // Configurazione Modalità Host
     @Published var streamingMode: HostStreamingMode = .lanDirect
@@ -603,6 +617,24 @@ struct ContentView: View {
                         .font(.caption)
                 }
             }
+
+            if !allPermissionsGranted {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("ℹ️ Dopo aver attivato la spunta in Impostazioni di Sistema, macOS richiede di riavviare l'app per aggiornare i permessi.")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+
+                    Button(action: {
+                        model.relaunchApp()
+                    }) {
+                        Label("Riavvia Applicazione", systemImage: "power")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.orange)
+                }
+                .padding(.top, 4)
+            }
         }
         .padding(10)
         .background(Color(NSColor.controlBackgroundColor))
@@ -664,6 +696,18 @@ struct ContentView: View {
                 }
                 Spacer()
             }
+
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.shield.fill")
+                    .foregroundColor(.green)
+                Text("Nessun permesso speciale richiesto su questo iMac (funziona direttamente come display e controller).")
+                    .font(.caption2)
+                    .foregroundColor(.green)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.green.opacity(0.12))
+            .cornerRadius(6)
 
             Divider()
 
